@@ -1,0 +1,21 @@
+Metadata-Version: 2.4
+Name: fmdf
+Version: 0.1.0
+Summary: JAX/Flax multi-task fine-tuning and evaluation system for driving-log sequences
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: jax>=0.4.25
+Requires-Dist: jaxlib>=0.4.25
+Requires-Dist: flax>=0.8.2
+Requires-Dist: optax>=0.2.1
+Requires-Dist: orbax-checkpoint>=0.5.8
+Requires-Dist: numpy>=1.26.4
+Requires-Dist: pandas>=2.2.1
+Requires-Dist: scikit-learn>=1.4.1
+Requires-Dist: matplotlib>=3.8.3
+Requires-Dist: duckdb>=0.10.0
+Requires-Dist: pyyaml>=6.0.1
+Requires-Dist: pyarrow>=15.0.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0.0; extra == "dev"
+Requires-Dist: ruff>=0.2.2; extra == "dev"
