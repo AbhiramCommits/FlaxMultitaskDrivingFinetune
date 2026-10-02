@@ -1,0 +1,27 @@
+model:
+  d_model: 128
+  n_heads: 4
+  n_layers: 4
+  d_ff: 512
+  dropout: 0.1
+  seq_len: 32
+  stride: 8
+  horizon_steps: 10
+
+training:
+  batch_size: 32
+  learning_rate: 3e-4
+  steps: 1500
+  warmup_steps: 150
+  seed: 42
+  weight_decay: 0.01
+
+loss_weights:
+  event: 1.0
+  horizon: 1.0
+  rare: 5.0
+  rare_pos_weight: 10.0
+
+lora:
+  rank: 8
+  alpha: 16.0
