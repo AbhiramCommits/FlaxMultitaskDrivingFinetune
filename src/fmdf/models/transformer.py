@@ -1,7 +1,6 @@
 """Flax linen transformer trunk for driving sequence modeling.
 """
 
-from typing import Any
 import flax.linen as nn
 import jax.numpy as jnp
 

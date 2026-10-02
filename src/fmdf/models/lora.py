@@ -1,13 +1,10 @@
-"""LoRA implementation from scratch for Flax Dense layers.
+"""LoRA injection and parameter masking for fine-tuning.
 """
 
-from typing import Any, Callable, Sequence
 import flax
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
-import optax
-
 
 
 class LoRADense(nn.Module):
@@ -23,8 +20,6 @@ class LoRADense(nn.Module):
     @nn.compact
     def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
         base_out = self.dense(x)
-        # LoRA low-rank branch
-        # We can implement A and B as trainable parameters in lora scope
         in_features = x.shape[-1]
         lora_a = self.param(
             "lora_a",
@@ -40,54 +35,68 @@ class LoRADense(nn.Module):
         return base_out + lora_out
 
 
-def inject_lora(model_def: nn.Module, rank: int = 8, targets: Sequence[str] = ("q", "v", "Dense")):
-    """Inject LoRA into attention q/v projections and MLP layers.
-    For simplicity in Flax, we can either wrap dense layers or return parameter masks.
-    Here we define a parameter mask and optax multi_transform.
+def inject_lora_params(params: dict, rank: int = 8) -> dict:
+    """Inject LoRA parameters into attention projection layers or MLP layers selectively to keep trainable share < 5%.
     """
-    pass
-
-
-def trainable_mask(params: dict, mode: str = "lora") -> dict:
-    """Return an optax multi_transform mask or boolean param tree.
-    True means trainable, False means frozen.
-    """
-    def _recurse(p_tree, prefix=""):
-        if isinstance(p_tree, dict):
+    def _inject(subdict, prefix=""):
+        if not isinstance(subdict, dict):
+            return subdict
+        # Inject only in self_attention query/value or specific dense layers
+        is_target = "self_attention" in prefix and ("query" in prefix or "value" in prefix)
+        if "kernel" in subdict and hasattr(subdict["kernel"], "shape") and len(subdict["kernel"].shape) == 2 and is_target:
             res = {}
-            for k, v in p_tree.items():
-                new_prefix = f"{prefix}.{k}" if prefix else k
-                res[k] = _recurse(v, new_prefix)
+            for k, v in subdict.items():
+                res[k] = _inject(v, f"{prefix}.{k}" if prefix else k)
+            v_kernel = subdict["kernel"]
+            in_dim, out_dim = v_kernel.shape
+            key = jax.random.PRNGKey(42)
+            res["lora_a"] = jax.random.normal(key, (in_dim, rank)) * (1.0 / jnp.sqrt(rank))
+            res["lora_b"] = jnp.zeros((rank, out_dim))
             return res
         else:
-            # Decide based on mode and param path
-            if mode == "full":
-                return True
-            elif mode == "head_only":
-                return "heads" in prefix
-            elif mode == "lora":
-                # heads are trainable, lora_a / lora_b are trainable, rest frozen
-                if "heads" in prefix or "lora_a" in prefix or "lora_b" in prefix:
-                    return True
-                return False
-            else:
-                return False
+            res = {}
+            for k, v in subdict.items():
+                res[k] = _inject(v, f"{prefix}.{k}" if prefix else k)
+            return res
 
-    return _recurse(params)
+    return _inject(params)
 
 
-def count_params(params: dict) -> tuple[int, int, float]:
-    """Return (total_params, trainable_params, trainable_percentage).
+def get_trainable_mask(params: dict, mode: str = "lora") -> dict:
+    """Return boolean pytree for optax.masked or gradient masking.
     """
-    flat_params = flax.traverse_util.flatten_dict(params, sep=".")
-    total = sum(v.size for v in flat_params.values())
-    
-    # Trainable params are those in heads or lora_a/lora_b, OR if pretraining all
-    trainable = sum(
-        v.size for k, v in flat_params.items()
-        if "heads" in k or "lora_a" in k or "lora_b" in k or "trunk" in k
-    )
-    if trainable == 0:
-        trainable = total
+    flat = flax.traverse_util.flatten_dict(params, sep=".")
+    mask = {}
+    for k, v in flat.items():
+        if mode == "full":
+            mask[k] = True
+        elif mode == "head_only":
+            mask[k] = "heads" in k
+        elif mode == "lora":
+            mask[k] = "heads" in k or "lora_a" in k or "lora_b" in k
+        else:
+            mask[k] = False
+    return mask
+
+
+def count_params_lora(params: dict, mode: str = "lora") -> tuple[int, int, float]:
+    flat = flax.traverse_util.flatten_dict(params, sep=".")
+    total = sum(v.size for v in flat.values())
+    trainable = 0
+    for k, v in flat.items():
+        if mode == "full":
+            is_tr = True
+        elif mode == "head_only":
+            is_tr = "heads" in k
+        elif mode == "lora":
+            is_tr = "heads" in k or "lora_a" in k or "lora_b" in k
+        else:
+            is_tr = False
+        if is_tr:
+            trainable += v.size
     pct = (trainable / total) * 100.0 if total > 0 else 0.0
     return total, trainable, pct
+
+
+def count_params(params: dict, mode: str = "lora") -> tuple[int, int, float]:
+    return count_params_lora(params, mode)

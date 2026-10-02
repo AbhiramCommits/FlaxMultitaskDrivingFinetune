@@ -124,14 +124,8 @@ def generate_logs(n_logs: int = 1200, seed: int = 42) -> pd.DataFrame:
     # Compute task_rare: near-collision when horizon TTC < threshold
     # TTC proxy: lead_dist / max(1e-3, -lead_rel_v) when rel_v < 0, else large.
     # Alternatively, threshold on lead_dist < 8.0 and accel < -2.0 to hit 1.5%-3%
-    rare_scores = (df["lead_dist"] < 9.0) & (df["ego_accel"] < -2.0)
     # Adjust positive rate to be strictly between 1.5% and 3.0%
-    # If too high or low, tune threshold or randomly sample
     n_total = len(df)
-    target_pos_rate = 0.022  # 2.2%
-    current_pos = rare_scores.sum() / n_total
-
-    # Let's make it deterministic & tunable via condition
     rare_mask = (df["lead_dist"] < 8.5) & (df["ego_accel"] < -1.8) | (
         (df["lead_dist"] < 6.0) & (df["lead_rel_v"] < -4.0)
     )

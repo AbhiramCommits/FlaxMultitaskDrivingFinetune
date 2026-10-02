@@ -5,7 +5,6 @@ import argparse
 import json
 import os
 import time
-import flax
 import flax.linen as nn
 import jax
 import jax.numpy as jnp
@@ -87,6 +86,7 @@ def pretrain(config_path: str = "configs/base.yaml", steps: int = 1500):
         sampler="uniform",
         is_train=False,
     )
+    _ = val_batcher
 
     model = DrivingModel(
         d_model=config["model"]["d_model"],
@@ -141,7 +141,6 @@ def pretrain(config_path: str = "configs/base.yaml", steps: int = 1500):
     log_file = open("artifacts/logs/pretrain.jsonl", "w")
 
     step = 0
-    epoch = 0
     print(f"Starting pretraining for {steps} steps...")
     start_time = time.time()
 

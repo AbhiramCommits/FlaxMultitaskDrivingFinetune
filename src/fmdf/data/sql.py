@@ -4,7 +4,6 @@
 import argparse
 import os
 import duckdb
-import pandas as pd
 
 
 def build_dataset(raw_parquet: str = "data/raw.parquet", out_dir: str = "data"):
