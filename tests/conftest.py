@@ -18,3 +18,8 @@ def setup_test_env():
         df = generate_logs(n_logs=50, seed=42)
         df.to_parquet("data/raw.parquet")
         build_dataset("data/raw.parquet", "data")
+
+    # Norm stats are computed from the train split when a training Batcher is built
+    if not os.path.exists("artifacts/norm_stats.json"):
+        from fmdf.data.pipeline import Batcher
+        Batcher("data/windows_train.parquet", is_train=True)
